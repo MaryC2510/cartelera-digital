@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cartelera de Sala de Reuniones</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0b1c2c;
+  color: white;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  height: 100vh;
+}
+
+.sidebar {
+  padding: 30px;
+  background: #081520;
+}
+
+.clock {
+  font-size: 60px;
+  font-weight: bold;
+}
+
+.date {
+  margin-top: 10px;
+  font-size: 20px;
+}
+
+.events-title {
+  margin-top: 30px;
+  font-size: 22px;
+}
+
+.event-card {
+  background: #122b40;
+  padding: 15px;
+  border-radius: 10px;
+  margin-top: 15px;
+  border-left: 5px solid #4fc3f7;
+}
+
+.event-time {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.event-name {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.event-detail {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.main {
+  padding: 40px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+}
+
+.day {
+  background: #122b40;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.day-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.meeting {
+  background: #1e3c57;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="sidebar">
+    <div class="clock" id="clock"></div>
+    <div class="date" id="date"></div>
+
+    <div class="events-title">Eventos de Hoy</div>
+    <div id="todayEvents"></div>
+  </div>
+
+  <div class="main">
+    <div class="grid" id="weekGrid"></div>
+  </div>
+
+</div>
+
+<script>
+const CALENDAR_ICS = "/calender";
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString('es-CL', {hour: '2-digit', minute:'2-digit'});
+
+  document.getElementById("date").textContent =
+    now.toLocaleDateString('es-CL', {weekday:'long', day:'numeric', month:'long'});
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+
+async function loadEvents() {
+  const res = await fetch(CALENDAR_ICS);
+  const text = await res.text();
+
+  const events = text.split("BEGIN:VEVENT").map(e => {
+    const start = e.match(/DTSTART:(\d+)/);
+    const summary = e.match(/SUMMARY:(.*)/);
+    const location = e.match(/LOCATION:(.*)/);
+
+    if (!start || !summary) return null;
+
+    const s = start[1];
+
+    const date = new Date(
+      s.substring(0,4),
+      s.substring(4,6)-1,
+      s.substring(6,8),
+      s.substring(9,11),
+      s.substring(11,13)
+    );
+
+    return {
+      date,
+      title: summary[1],
+      location: location ? location[1] : ""
+    };
+  }).filter(e => e);
+
+  render(events);
+}
+
+function render(events) {
+  const todayDiv = document.getElementById("todayEvents");
+  const weekGrid = document.getElementById("weekGrid");
+
+  todayDiv.innerHTML = "";
+  weekGrid.innerHTML = "";
+
+  const now = new Date();
+
+  // FILTRAR SOLO LUNES A VIERNES
+  const weekdays = [1,2,3,4,5];
+
+  const weekDaysMap = {};
+
+  events.forEach(e => {
+    const day = e.date.getDay();
+
+    if (!weekdays.includes(day)) return;
+
+    const key = e.date.toDateString();
+
+    if (!weekDaysMap[key]) weekDaysMap[key] = [];
+    weekDaysMap[key].push(e);
+
+    // EVENTOS DE HOY
+    if (e.date.toDateString() === now.toDateString()) {
+      todayDiv.innerHTML += `
+        <div class="event-card">
+          <div class="event-time">${e.date.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</div>
+          <div class="event-name">${e.title}</div>
+          <div class="event-detail">${e.location}</div>
+        </div>
+      `;
+    }
+  });
+
+  // CREAR GRID SEMANAL
+  Object.keys(weekDaysMap).slice(0,5).forEach(day => {
+    const div = document.createElement("div");
+    div.className = "day";
+
+    div.innerHTML = `<div class="day-title">${day}</div>`;
+
+    weekDaysMap[day].forEach(e => {
+      div.innerHTML += `
+        <div class="meeting">
+          ${e.date.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}
+          <br><b>${e.title}</b>
+        </div>
+      `;
+    });
+
+    weekGrid.appendChild(div);
+  });
+}
+
+loadEvents();
+setInterval(loadEvents, 300000);
+</script>
+
+</body>
+</html>
